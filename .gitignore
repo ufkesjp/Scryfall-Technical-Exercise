@@ -1,0 +1,8 @@
+project_notes/
+.venv/
+__pycache__/
+# I am not expecting to use this for this project, but I am including it as a precaution
+.env
+data/*
+!data/.gitkeep
+.DS_Store
