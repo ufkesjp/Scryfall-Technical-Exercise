@@ -4,7 +4,7 @@ from pathlib import Path
 import requests
 
 BULK_URL = "https://api.scryfall.com/bulk-data/oracle-cards"
-OUT_PATH = Path(__file__).parent / "data" / "oracle-cards.json.gz"
+OUT_PATH = Path(__file__).parent / "data" / "oracle-cards.jsonl.gz"
 MIN_BYTES = 10*1024*1024  # will use to verify >= 10MB file size
 HEADERS = {"User-Agent": "ScryfallTechnicalExercise/1.0", "Accept": "application/json"}
 
