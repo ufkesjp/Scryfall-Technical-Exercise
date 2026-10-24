@@ -1,10 +1,11 @@
-"""Download the Scryfall Oracle Cards file (if needed) and load it into SQLite."""
+"""Download the Scryfall Oracle Cards file (if needed), load it into SQLite, and run the analysis."""
 from __future__ import annotations
 
 import argparse
 import logging
 from pathlib import Path
 
+import analysis
 import fetch_data
 from db import DEFAULT_DB, connect
 from load import load
@@ -27,6 +28,7 @@ def main() -> None:
     conn = connect(args.db)
     try:
         load(conn, read_cards(path))
+        analysis.run(conn)
     finally:
         conn.close()
 

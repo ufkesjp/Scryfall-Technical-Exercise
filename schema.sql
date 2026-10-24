@@ -70,8 +70,8 @@ CREATE TABLE card_color_identity (
     PRIMARY KEY (oracle_id, color_code)
 ) WITHOUT ROWID;
 
-CREATE INDEX idx_cards_set_code    ON cards (set_code);
-CREATE INDEX idx_cards_layout_name ON cards (layout, name);
-CREATE INDEX idx_card_keywords_kw  ON card_keywords (keyword_id);
-CREATE INDEX idx_card_types_name   ON card_types (type_role, type_name);
-CREATE INDEX idx_card_color_identity ON card_color_identity (color_code);
+-- Chosen by benchmarking the four queries in queries.sql (EXPLAIN QUERY PLAN plus timings); the other columns
+-- they touch are already covered by primary keys. Both are leading-layout because every query filters on the
+-- playable_cards view. Indexes on card_types and card_color_identity made question 3 slower, so there are none.
+CREATE INDEX idx_cards_layout_set_rarity ON cards (layout, set_code, rarity);   -- question 1, covering
+CREATE INDEX idx_cards_layout_released   ON cards (layout, released_at);        -- question 4, covering
