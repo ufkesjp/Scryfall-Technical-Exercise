@@ -6,18 +6,22 @@ A Python 3 + SQLite pipeline that downloads Scryfall's Oracle Cards bulk file, l
 This project uses the "Oracle Cards" file from [Scryfall's bulk data API](https://scryfall.com/docs/api/bulk-data) ([API docs](https://scryfall.com/docs)). It has one JSON object per unique Magic: The Gathering card (about 39,000 cards, roughly 25 MB gzipped and 200 MB uncompressed), so it is well over the 10 MB minimum. I picked it because I enjoy the game and expected plenty of fun, answerable questions about the cards once they were in a relational database.
 
 ## Prerequisites
-- Python 3.11 or newer
+- Python 3.11 or newer (CI runs 3.12; a clean-clone run also worked on 3.14)
 - Internet access for the first run (about 25 MB download)
 
 ## Setup and run
 ```bash
-python -m venv .venv
+python3 -m venv .venv          # use python3 if python isn't found (common on macOS)
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python main.py
 ```
 
-`python main.py` does everything end to end: downloads the file to `data/` (skipped if already present), builds `data/scryfall.db` from `schema.sql`, loads the cards, then prints the analyses and saves the chart. The first run takes under a minute plus the download time, and a re-run takes about 6 seconds.
+Once the venv is active, `python` works for the remaining commands.
+
+`python main.py` does everything end to end: downloads the file to `data/` (skipped if already present), builds `data/scryfall.db` from `schema.sql`, loads the cards, then prints the analyses and saves the chart. A first run took about 25 seconds in a clean-clone test, including the 25 MB download, and a re-run takes about 6 seconds.
+
+A successful run prints `Loaded N cards` progress lines, then four sections headed `=== 1. ... ===` through `=== 4. ... ===`, and ends with question 4's "Finding" line. Question 2 also prints `Chart saved to .../output/avg_cmc_by_color_count.png`.
 
 Options:
 - `--file PATH` loads a local `.jsonl.gz` instead of downloading.
@@ -62,7 +66,7 @@ See the [ER diagram](docs/er_diagram.md) (Mermaid, rendered by GitHub), generate
 - Power and toughness are text because of values like `*` and `1+*`.
 
 ## Design notes
-- **Idempotent load.** Running twice gives identical row counts (verified: 38,987 cards, 588 sets, 895 keywords, 25,139 card-keyword rows, 85,810 type rows, 40,193 color-identity rows, and `PRAGMA foreign_key_check` is clean). Cards use `INSERT OR REPLACE`, which cascades to the old child rows so stale keywords or types don't survive. Sets and keywords use `INSERT OR IGNORE`, because replacing a parent row would break foreign keys and renumber keyword ids.
+- **Idempotent load.** Running twice gives identical row counts (verified on the 2026-10-23 export; the file refreshes daily, so your numbers will differ slightly: 38,987 cards, 588 sets, 895 keywords, 25,139 card-keyword rows, 85,810 type rows, 40,193 color-identity rows, and `PRAGMA foreign_key_check` is clean). Cards use `INSERT OR REPLACE`, which cascades to the old child rows so stale keywords or types don't survive. Sets and keywords use `INSERT OR IGNORE`, because replacing a parent row would break foreign keys and renumber keyword ids.
 - **Batching.** Rows are buffered and written 2,000 cards at a time, one transaction per batch, so a failure rolls back that batch only.
 - **Safe download.** The file streams into a `.part` file with retries, backoff and timeouts, and resumes after an interrupted connection. It is checked as a readable gzip of at least 10 MB, then renamed atomically, so a bad file is never left in place.
 - **Multi-faced cards.** These have no top-level `mana_cost`, so it is NULL for them. Their `type_line` is the faces joined with ` // `, and `card_types` includes the parts of every face, de-duplicated.
