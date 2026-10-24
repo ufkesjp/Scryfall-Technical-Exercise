@@ -6,7 +6,7 @@ A Python 3 + SQLite pipeline that downloads Scryfall's Oracle Cards bulk file, l
 This project uses the "Oracle Cards" file from [Scryfall's bulk data API](https://scryfall.com/docs/api/bulk-data) ([API docs](https://scryfall.com/docs)). It has one JSON object per unique Magic: The Gathering card (about 39,000 cards, roughly 25 MB gzipped and 200 MB uncompressed), so it is well over the 10 MB minimum. I picked it because I enjoy the game and expected plenty of fun, answerable questions about the cards once they were in a relational database.
 
 ## Prerequisites
-- Python 3.10 or newer
+- Python 3.11 or newer
 - Internet access for the first run (about 25 MB download)
 
 ## Setup and run
