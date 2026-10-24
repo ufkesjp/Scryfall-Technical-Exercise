@@ -1,31 +1,98 @@
-"""Test the connection to the Scryfall API and download the Oracle Cards bulk data file. Verify it meets size requirements."""
+"""Test the connection to the Scryfall API and download the Oracle Cards bulk data file. Verify it meets size requirements.
+
+The download streams into a .part file that is renamed only once it is complete, so an interrupted run can never
+leave a truncated oracle-cards.jsonl.gz behind. Re-running resumes the .part file with an HTTP Range request.
+"""
+import gzip
+import logging
 import sys
 from pathlib import Path
+
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 BULK_URL = "https://api.scryfall.com/bulk-data/oracle-cards"
 OUT_PATH = Path(__file__).parent / "data" / "oracle-cards.jsonl.gz"
 MIN_BYTES = 10*1024*1024  # will use to verify >= 10MB file size
 HEADERS = {"User-Agent": "ScryfallTechnicalExercise/1.0", "Accept": "application/json"}
+TIMEOUT = (10, 60)  # (connect, read) seconds
+RESUME_ATTEMPTS = 5  # extra tries when the connection drops mid-download
+
+log = logging.getLogger(__name__)
+
+
+def make_session() -> requests.Session:
+    """Session that retries transient failures (rate limits and 5xx) with exponential backoff."""
+    retry = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=("GET",),
+        respect_retry_after_header=True,
+    )
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
+
+
+def is_valid_gzip(path: Path) -> bool:
+    """True if path decompresses end to end (this also checks the gzip CRC and catches truncation)."""
+    try:
+        with gzip.open(path, "rb") as f:
+            while f.read(1 << 20):
+                pass
+    except (OSError, EOFError):
+        return False
+    return True
+
+
+def download(session: requests.Session, url: str, out_path: Path) -> None:
+    """Download url to out_path via out_path.part, resuming a partial file if one exists."""
+    part = out_path.with_name(out_path.name + ".part")
+    for attempt in range(1, RESUME_ATTEMPTS + 1):
+        offset = part.stat().st_size if part.exists() else 0
+        headers = {"Range": f"bytes={offset}-"} if offset else {}
+        try:
+            with session.get(url, headers=headers, stream=True, timeout=TIMEOUT) as r:
+                if r.status_code == 416:  # nothing left to fetch: the .part file is already complete
+                    break
+                r.raise_for_status()
+                if offset and r.status_code != 206:  # server ignored Range, so start over
+                    offset = 0
+                log.info("Downloading %s (%s from byte %d)", url, "resuming" if offset else "starting", offset)
+                with open(part, "ab" if offset else "wb") as f:
+                    for chunk in r.iter_content(1 << 20):
+                        f.write(chunk)
+            break
+        except (requests.ConnectionError, requests.Timeout, requests.exceptions.ChunkedEncodingError) as e:
+            log.warning("Download interrupted (attempt %d/%d): %s", attempt, RESUME_ATTEMPTS, e)
+            if attempt == RESUME_ATTEMPTS:
+                raise
+
+    size = part.stat().st_size
+    if size < MIN_BYTES:
+        part.unlink()  # too small to be real, so don't resume it next time
+        sys.exit(f"ERROR: File size is not at least {MIN_BYTES / 1024 / 1024:.2f} MB ({size} bytes)")
+    if not is_valid_gzip(part):
+        part.unlink()  # corrupt, so start fresh next time rather than resuming it
+        sys.exit("ERROR: Downloaded file is not a readable gzip; deleted it, please re-run.")
+    part.replace(out_path)  # atomic: out_path only ever holds a complete file
+
 
 def main():
-    resp = requests.get(BULK_URL, headers=HEADERS, timeout = 30)
+    session = make_session()
+    resp = session.get(BULK_URL, timeout=TIMEOUT)
     resp.raise_for_status()
-    download_uri= resp.json()["jsonl_download_uri"]
+    download_uri = resp.json()["jsonl_download_uri"]
 
     OUT_PATH.parent.mkdir(exist_ok=True)
-    print(f"Downloading {download_uri}")
-    with requests.get(download_uri, headers=HEADERS, stream=True, timeout=30) as r:
-        r.raise_for_status()
-        with open(OUT_PATH, "wb") as f:
-            for chunk in r.iter_content(1 <<20):
-                f.write(chunk)
+    download(session, download_uri, OUT_PATH)
 
     size = OUT_PATH.stat().st_size
-    print(f"Saved {OUT_PATH} ({size / 1024 / 1024:.2f} MB)")
-    if size < MIN_BYTES:
-        sys.exit(f"WARNING: File size is not at least {MIN_BYTES / 1024 / 1024:.2f} MB ({size} bytes)")
-    print("OK: File size meets minimum requirements.")
+    log.info("Saved %s (%.2f MB)", OUT_PATH, size / 1024 / 1024)
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     main()
