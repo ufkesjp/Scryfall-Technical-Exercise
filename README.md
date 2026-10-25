@@ -29,7 +29,7 @@ Options:
 - `--file PATH` loads a local `.jsonl.gz` instead of downloading.
 - `--db PATH` builds the database somewhere other than `data/scryfall.db`.
 
-To pick up a newer daily export, delete `data/oracle-cards.jsonl.gz` and run again. To change the schema, delete `data/scryfall.db` and rebuild (the DDL is plain `CREATE TABLE`, applied once when the database file is first created).
+To pick up a newer daily export, delete `data/oracle-cards.jsonl.gz` and run again. To change the schema, delete `data/scryfall.db` and rebuild (`schema.sql` is idempotent and runs on every connect, but `IF NOT EXISTS` won't alter existing tables).
 
 Run the tests with `python -m pytest`.
 
@@ -52,7 +52,7 @@ Run the tests with `python -m pytest`.
 | [fetch_data.py](fetch_data.py) | Resolves the current file URL and downloads it safely |
 | [transform.py](transform.py) | Streams the file and flattens each card into rows per table |
 | [load.py](load.py) | Batched, transactional, repeatable inserts |
-| [db.py](db.py) | SQLite connection; applies `schema.sql` to a fresh database |
+| [db.py](db.py) | SQLite connection; applies `schema.sql` (idempotent) on every connect |
 | [schema.sql](schema.sql) | DDL, reference-row seeds and indexes |
 | [analysis.py](analysis.py), [queries.sql](queries.sql) | The four questions |
 | [make_er_diagram.py](make_er_diagram.py) | Generates the ER diagram from `schema.sql` |
