@@ -11,6 +11,8 @@ This project uses the "Oracle Cards" file from [Scryfall's bulk data API](https:
 
 ## Setup and run
 ```bash
+git clone https://github.com/ufkesjp/Scryfall-Technical-Exercise.git
+cd Scryfall-Technical-Exercise
 python3 -m venv .venv          # use python3 if python isn't found (common on macOS)
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
