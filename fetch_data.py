@@ -4,6 +4,7 @@ The download streams into a .part file that is renamed only once it is complete,
 leave a truncated oracle-cards.jsonl.gz behind. Re-running resumes the .part file with an HTTP Range request.
 """
 import gzip
+import json
 import logging
 import sys
 from pathlib import Path
@@ -18,6 +19,7 @@ MIN_BYTES = 10*1024*1024  # will use to verify >= 10MB file size
 HEADERS = {"User-Agent": "ScryfallTechnicalExercise/1.0", "Accept": "application/json"}
 TIMEOUT = (10, 60)  # (connect, read) seconds
 RESUME_ATTEMPTS = 5  # extra tries when the connection drops mid-download
+REQUIRED_KEYS = {"id", "oracle_id", "name"}  # every card line must have these
 
 log = logging.getLogger(__name__)
 
@@ -48,8 +50,21 @@ def is_valid_gzip(path: Path) -> bool:
     return True
 
 
-def download(session: requests.Session, url: str, out_path: Path) -> None:
-    """Download url to out_path via out_path.part, resuming a partial file if one exists."""
+def first_line_is_card(path: Path) -> bool:
+    """True if the first line is a JSON object with the keys the pipeline needs (catches a gzipped error body)."""
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            card = json.loads(f.readline())
+    except (OSError, EOFError, ValueError):  # ValueError covers bad JSON and bad UTF-8
+        return False
+    return isinstance(card, dict) and REQUIRED_KEYS <= card.keys()
+
+
+def download(session: requests.Session, url: str, out_path: Path, expected_size: int | None = None) -> None:
+    """Download url to out_path via out_path.part, resuming a partial file if one exists.
+
+    expected_size is the compressed_size Scryfall reports in the bulk-data metadata.
+    """
     part = out_path.with_name(out_path.name + ".part")
     for attempt in range(1, RESUME_ATTEMPTS + 1):
         offset = part.stat().st_size if part.exists() else 0
@@ -75,9 +90,18 @@ def download(session: requests.Session, url: str, out_path: Path) -> None:
     if size < MIN_BYTES:
         part.unlink()  # too small to be real, so don't resume it next time
         sys.exit(f"ERROR: File size is not at least {MIN_BYTES / 1024 / 1024:.2f} MB ({size} bytes)")
+    # The size and gzip checks overlap on truncation but each catches something the other can't: the size check
+    # catches a complete, valid file that isn't the one Scryfall advertised, while the gzip check catches a
+    # corrupted file of the right size. MIN_BYTES above is the fallback when the metadata has no compressed_size.
+    if expected_size is not None and size != expected_size:
+        part.unlink()
+        sys.exit(f"ERROR: Downloaded {size} bytes but Scryfall reports {expected_size}; deleted it, please re-run.")
     if not is_valid_gzip(part):
         part.unlink()  # corrupt, so start fresh next time rather than resuming it
         sys.exit("ERROR: Downloaded file is not a readable gzip; deleted it, please re-run.")
+    if not first_line_is_card(part):
+        part.unlink()
+        sys.exit("ERROR: First line is not a card object; deleted the file, please re-run.")
     part.replace(out_path)  # atomic: out_path only ever holds a complete file
 
 
@@ -85,10 +109,10 @@ def main():
     session = make_session()
     resp = session.get(BULK_URL, timeout=TIMEOUT)
     resp.raise_for_status()
-    download_uri = resp.json()["jsonl_download_uri"]
+    meta = resp.json()
 
     OUT_PATH.parent.mkdir(exist_ok=True)
-    download(session, download_uri, OUT_PATH)
+    download(session, meta["jsonl_download_uri"], OUT_PATH, meta.get("compressed_size"))
 
     size = OUT_PATH.stat().st_size
     log.info("Saved %s (%.2f MB)", OUT_PATH, size / 1024 / 1024)
