@@ -18,7 +18,7 @@ WITH counts AS (
     FROM playable_cards c
     JOIN sets s     ON s.set_code = c.set_code
     JOIN rarities r ON r.rarity = c.rarity
-    GROUP BY s.set_type, r.rarity
+    GROUP BY s.set_type, r.rarity, r.sort_order
 ),
 shares AS (
     SELECT *, SUM(cards) OVER (PARTITION BY set_type) AS set_type_cards FROM counts
