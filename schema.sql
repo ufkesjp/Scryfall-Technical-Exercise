@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS keywords (
 CREATE TABLE IF NOT EXISTS card_keywords (
     oracle_id  TEXT NOT NULL REFERENCES cards (oracle_id) ON DELETE CASCADE,
     keyword_id INTEGER NOT NULL REFERENCES keywords (keyword_id),
-    PRIMARY KEY (oracle_id, keyword_id)
+    PRIMARY KEY (oracle_id, keyword_id) -- this is a non-materialized composite key, the combination of these fields represents the grain of the table
 ) WITHOUT ROWID;
 
 -- Type line split into parts. For multi-faced cards the parts of every face are included.
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS card_types (
     oracle_id TEXT NOT NULL REFERENCES cards (oracle_id) ON DELETE CASCADE,
     type_role TEXT NOT NULL CHECK (type_role IN ('supertype', 'card_type', 'subtype')),
     type_name TEXT NOT NULL,
-    PRIMARY KEY (oracle_id, type_role, type_name)
+    PRIMARY KEY (oracle_id, type_role, type_name) -- this is a non-materialized composite key, the combination of these fields represents the grain of the table
 ) WITHOUT ROWID;
 
 -- WUBRG reference: gives color letters a name and a sort order.
@@ -67,7 +67,7 @@ INSERT OR IGNORE INTO colors VALUES ('W', 'White', 1), ('U', 'Blue', 2), ('B', '
 CREATE TABLE IF NOT EXISTS card_color_identity (
     oracle_id  TEXT NOT NULL REFERENCES cards (oracle_id) ON DELETE CASCADE,
     color_code TEXT NOT NULL REFERENCES colors (color_code),
-    PRIMARY KEY (oracle_id, color_code)
+    PRIMARY KEY (oracle_id, color_code) -- this is a non-materialized composite key, the combination of these fields represents the grain of the table
 ) WITHOUT ROWID;
 
 -- Chosen by benchmarking the four queries in queries.sql (EXPLAIN QUERY PLAN plus timings); the other columns
