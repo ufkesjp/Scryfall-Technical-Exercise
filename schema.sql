@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS card_types (
 ) WITHOUT ROWID;
 
 -- WUBRG reference: gives color letters a name and a sort order.
+-- Colorless is deliberately not a row here: the rules treat it as the absence of color, not a sixth color.
 CREATE TABLE IF NOT EXISTS colors (
     color_code TEXT PRIMARY KEY CHECK (length(color_code) = 1),   -- W, U, B, R, G
     color_name TEXT NOT NULL UNIQUE,

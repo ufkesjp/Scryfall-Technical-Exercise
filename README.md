@@ -72,6 +72,7 @@ See the [ER diagram](docs/er_diagram.md) (Mermaid, rendered by GitHub), generate
 - **Batching.** Rows are buffered and written 2,000 cards at a time, one transaction per batch, so a failure rolls back that batch only.
 - **Safe download.** The file streams into a `.part` file with retries, backoff and timeouts, and resumes after an interrupted connection. It is checked as a readable gzip of at least 10 MB, then renamed atomically, so a bad file is never left in place.
 - **Multi-faced cards.** These have no top-level `mana_cost`, so it is NULL for them. Their `type_line` is the faces joined with ` // `, and `card_types` includes the parts of every face, de-duplicated.
+- **Colorless is not a color.** `colors` holds only W, U, B, R and G, because the rules treat colorless as the absence of color. Colorless cards have no `card_color_identity` rows, so queries find them with a `LEFT JOIN` (question 2 counts them as 0 colors).
 - **"Playable" filter.** The schema has no legalities, so the analyses exclude non-deck objects by `layout` (tokens, art cards, emblems, vanguard, scheme, planar, archenemy) through a temporary view. Digital-only cards (for example Alchemy) are kept.
 
 ## Known quirks
